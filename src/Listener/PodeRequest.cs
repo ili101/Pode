@@ -134,7 +134,6 @@ namespace Pode
             }
             catch (Exception ex)
             {
-                PodeHelpers.WriteException(ex);
                 Error = new HttpRequestException(ex.Message, ex);
                 Error.Data.Add("PodeStatusCode", 400);
             }
