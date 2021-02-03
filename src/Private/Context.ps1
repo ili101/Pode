@@ -555,7 +555,16 @@ function Open-PodeConfiguration
 
     # check the path exists, and load the config
     if (Test-PodePath -Path $configPath -NoStatus) {
-        $config = Import-PowerShellDataFile -Path $configPath -ErrorAction Stop
+
+        $CallerState = [PSModuleInfo]::new($false)
+        $CallerState.SessionState = $Script:CallerSessionState
+        $config = . $CallerState {
+            param (
+                $configPath
+            )
+            & ([ScriptBlock]::Create((Get-Content $configPath | Out-String)))
+        } -configPath $configPath
+
         Set-PodeServerConfiguration -Configuration $config.Server -Context $Context
         Set-PodeWebConfiguration -Configuration $config.Web -Context $Context
     }

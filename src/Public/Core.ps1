@@ -113,6 +113,7 @@ function Start-PodeServer
         [switch]
         $CurrentPath
     )
+    $Script:CallerSessionState = $PSCmdlet.SessionState
 
     # ensure the session is clean
     $PodeContext = $null
