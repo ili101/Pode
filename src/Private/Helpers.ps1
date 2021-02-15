@@ -1232,6 +1232,21 @@ function ConvertFrom-PodeRequestContent
         }
 
         { $_ -ieq 'multipart/form-data' } {
+            if ($Request.Form) {
+                foreach ($File in $Request.Form.Files) {
+                    $MemoryStream = [System.IO.MemoryStream]::new()
+                    $File.CopyTo($MemoryStream)
+                    $Result.Files.Add($File.FileName, @{
+                            ContentType = $File.ContentType
+                            Bytes       = $MemoryStream.ToArray()
+                        })
+                    $Result.Data.Add($File.Name, $File.FileName)
+                }
+                foreach ($FormItem in $Request.Form) {
+                    $Result.Data.Add($FormItem.Key, $FormItem.Value[0])
+                }
+                break
+            }
             # convert the stream to bytes
             $Content = $Request.RawBody
             if ($Content.Length -eq 0) {
@@ -1526,7 +1541,7 @@ function Convert-PodePathPatternToRegex
 
         [switch]
         $NotStrict
-    )    
+    )
 
     if (!$NotSlashes) {
         if ($Path -match '[\\/]\*$') {
