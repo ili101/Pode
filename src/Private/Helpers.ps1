@@ -1296,65 +1296,23 @@ function ConvertFrom-PodeRequestContent
         }
 
         { $_ -ieq 'multipart/form-data' } {
-            # convert the stream to bytes
-            $Content = $Request.RawBody
-            if ($Content.Length -eq 0) {
-                $Content = ConvertFrom-PodeStreamToBytes -Stream $Request.InputStream
+            $Stream = if ($Request.InputStream.DataAvailable -eq $false) {
+                [System.IO.MemoryStream]::new($Request.RawBody)
+            }
+            else {
+                $Request.InputStream
             }
 
-            $Lines = Get-PodeByteLinesFromByteArray -Bytes $Content -Encoding $Encoding -IncludeNewLine
-
-            # get the indexes for boundary lines (start and end)
-            $boundaryIndexes = @()
-            for ($i = 0; $i -lt $Lines.Length; $i++) {
-                if ((Test-PodeByteArrayIsBoundary -Bytes $Lines[$i] -Boundary $MetaData.Boundary.Start -Encoding $Encoding) -or
-                    (Test-PodeByteArrayIsBoundary -Bytes $Lines[$i] -Boundary $MetaData.Boundary.End -Encoding $Encoding)) {
-                    $boundaryIndexes += $i
-                }
+            $Parser = [HttpMultipartParser.MultipartFormDataParser]::Parse($Stream)
+            foreach ($File in $Parser.Files) {
+                $Result.Files.Add($File.FileName, @{
+                        ContentType = $File.ContentType
+                        Bytes       = $File.Data.ToArray()
+                    })
+                $Result.Data.Add($File.Name, $File.FileName)
             }
-
-            # loop through the boundary indexes (exclude last, as it's the end boundary)
-            for ($i = 0; $i -lt ($boundaryIndexes.Length - 1); $i++)
-            {
-                $bIndex = $boundaryIndexes[$i]
-
-                # the next line contains the key-value field names (content-disposition)
-                $fields = @{}
-                $disp = ConvertFrom-PodeBytesToString -Bytes $Lines[$bIndex+1] -Encoding $Encoding -RemoveNewLine
-
-                foreach ($line in @($disp -isplit ';')) {
-                    $atoms = @($line -isplit '=')
-                    if ($atoms.Length -eq 2) {
-                        $fields[$atoms[0].Trim()] = $atoms[1].Trim(' "')
-                    }
-                }
-
-                # use the next line to work out field values
-                if (!$fields.ContainsKey('filename')) {
-                    $value = ConvertFrom-PodeBytesToString -Bytes $Lines[$bIndex+3] -Encoding $Encoding -RemoveNewLine
-                    $Result.Data.Add($fields.name, $value)
-                }
-
-                # if we have a file, work out file and content type
-                if ($fields.ContainsKey('filename')) {
-                    $Result.Data.Add($fields.name, $fields.filename)
-
-                    if (![string]::IsNullOrWhiteSpace($fields.filename)) {
-                        $type = ConvertFrom-PodeBytesToString -Bytes $Lines[$bIndex+2] -Encoding $Encoding -RemoveNewLine
-
-                        $Result.Files.Add($fields.filename, @{
-                            ContentType = @($type -isplit ':')[1].Trim()
-                            Bytes = $null
-                        })
-
-                        $bytes = @()
-                        foreach ($b in ($Lines[($bIndex+4)..($boundaryIndexes[$i+1]-1)])) {
-                            $bytes += $b
-                        }
-
-                        $Result.Files[$fields.filename].Bytes = (Remove-PodeNewLineBytesFromArray $bytes $Encoding)
-                    }
-                }
+            foreach ($Parameter in $Parser.Parameters) {
+                $Result.Data.Add($Parameter.Name, $Parameter.Data)
             }
         }
 
@@ -1590,7 +1548,7 @@ function Convert-PodePathPatternToRegex
 
         [switch]
         $NotStrict
-    )    
+    )
 
     if (!$NotSlashes) {
         if ($Path -match '[\\/]\*$') {

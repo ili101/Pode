@@ -32,7 +32,9 @@
     RequiredAssemblies = @(
         'System.Web',
         'System.Net.Http',
-        './Libs/Pode.dll'
+        './Libs/Pode.dll',
+        './Libs/Microsoft.IO.RecyclableMemoryStream.dll',
+        './Libs/HttpMultipartParser.dll'
     )
 
     # Functions to export from this Module
